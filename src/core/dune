@@ -1,0 +1,5 @@
+(library
+ (name delta)
+ (libraries parsing resolution typing lowering llvm_gen)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))

@@ -1,0 +1,10 @@
+(library
+ (name parsing)
+ (libraries syntax)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving.eq)))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
