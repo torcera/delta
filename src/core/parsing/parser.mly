@@ -40,7 +40,6 @@
 %token VAR
 %token FUNCTION
 %token RETURN
-%token PRINT
 %token WHILE
 %token STRUCT
 %token IMPORT
@@ -81,7 +80,6 @@ stmt:
     | IF; LPAREN; cond_expr=expr; RPAREN; then_stmt=stmt; ELSE; else_stmt=stmt { IfStmt(cond_expr, then_stmt, else_stmt) }
     | WHILE; LPAREN; cond_expr=expr; RPAREN; body=stmt { WhileStmt(cond_expr, body) }
     | RETURN; expr=expr; SEMICOLON { ReturnStmt(expr) }
-    | PRINT; expr=expr; SEMICOLON { PrintStmt(expr) }
     | IMPORT; module_name=ID; SEMICOLON { Import(module_name) }
     | b=block { Block(b) }
     ;

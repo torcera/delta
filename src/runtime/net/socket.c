@@ -10,7 +10,7 @@
 #define BACKLOG 5
 
 // TODO: Move to IO
-void pputs(char *str) {
+void print(char *str) {
     printf("%s\n", str);
 }
 

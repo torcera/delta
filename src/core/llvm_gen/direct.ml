@@ -163,9 +163,6 @@ let rec codegen_stmt (stmt : Typed_ast.stmt) : llvalue option =
   | ExprStmt expr ->
       ignore (codegen_expr expr);
       None
-  | PrintStmt expr ->
-      ignore (codegen_expr expr);
-      raise (LLVMError "Print not implemented")
   | IfStmt (cond, then_stmt, else_stmt) ->
       let cond_val = codegen_expr cond in
       let zero = const_int bool_t 0 in

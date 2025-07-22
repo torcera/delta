@@ -1,5 +1,5 @@
 import io;
 
 fn main(): void {
-    pputs("Hello world!");
+    print("Hello world!");
 }

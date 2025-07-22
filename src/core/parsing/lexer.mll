@@ -48,7 +48,6 @@ rule read_token =
     | "while" { WHILE }
     | "import" { IMPORT }
     | "return" { RETURN }
-    | "print" { PRINT }
     | "extern" { EXTERN }
     | "struct" { STRUCT }
     | "." { DOT }

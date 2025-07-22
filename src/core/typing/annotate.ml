@@ -151,9 +151,6 @@ let rec annotate_stmt (env : ty Env.StringMap.t) (ret_ty : ty)
   | Parsed_ast.ExprStmt e ->
       let typed_expr, _ = annotate_expr env e in
       Typed_ast.ExprStmt typed_expr
-  | Parsed_ast.PrintStmt e ->
-      let typed_expr, _ = annotate_expr env e in
-      Typed_ast.PrintStmt typed_expr
   | Parsed_ast.IfStmt (cond_expr, then_stmt, else_stmt) ->
       let typed_cond_expr, cond_expr_ty = annotate_expr env cond_expr in
       if not (cond_expr_ty = TBool) then

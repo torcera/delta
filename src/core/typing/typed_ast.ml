@@ -21,7 +21,6 @@ type stmt =
   | IfStmt of expr * stmt * stmt
   | WhileStmt of expr * stmt
   | ReturnStmt of expr
-  | PrintStmt of expr
   | Block of decl list
 [@@deriving show, eq]
 
