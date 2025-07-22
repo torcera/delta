@@ -1,0 +1,4 @@
+struct Socket {
+    family: int;
+    port: int;
+}

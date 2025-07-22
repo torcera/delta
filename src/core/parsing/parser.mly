@@ -123,6 +123,7 @@ ty:
     | TYPE_CHAR { TChar }
     | TYPE_STRING { TString }
     | TYPE_VOID { TVoid }
+    | ty=ty; LBRACKET; RBRACKET { TArray(ty) }
     ;
 
 %inline un_op:

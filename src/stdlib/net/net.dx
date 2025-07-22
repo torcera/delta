@@ -3,5 +3,7 @@ extern fn bind_socket(sockfd int): int;
 extern fn listen_socket(sockfd int): int;
 extern fn accept_connection(sockfd int): int;
 extern fn send_data(sockfd int, data str): int;
-extern fn receive_data(sockfd int, buffer str, buffer_size int): int;
+extern fn receive_data(sockfd int): int;
+extern fn connect_socket(sockfd int): int;
 extern fn close_socket(sockfd int): int;
+extern fn fork(): int;

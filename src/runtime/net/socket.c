@@ -69,14 +69,32 @@ int send_data(int sockfd, const char *data) {
     return sent;
 }
 
-int receive_data(int sockfd, char *buffer, size_t buffer_size) {
+int receive_data(int sockfd) {
+    size_t buffer_size = 1024;
+    char buffer[buffer_size];
     int received = recv(sockfd, buffer, buffer_size, 0);
     if (received < 0) {
         perror("Failed to receive data");
         return -1;
     }
     buffer[received] = '\0';
+    printf("Received data: %s\n", buffer);
     return received;
+}
+
+int connect_socket(int sockfd) {
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    server_addr.sin_port = htons(PORT);
+
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Failed to connect to server");
+        return -1;
+    }
+    printf("Connected to server\n");
+    return 0;
 }
 
 int close_socket(int sockfd) {

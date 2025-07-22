@@ -1,4 +1,5 @@
 import net;
+import io;
 
 fn main(): int {
     var server_sock = create_socket();
@@ -11,8 +12,17 @@ fn main(): int {
         close_socket(server_sock);
     } else {}
 
+    print("Waiting for a connection");
+
     var client_sock = accept_connection(server_sock);
 
+    print("Client connected!");
+
+    var bytes_received = receive_data(client_sock);
+
+    print("Received data from client");
+
+    close_socket(client_sock);
     close_socket(server_sock);
 
     return 0;

@@ -1,0 +1,18 @@
+import io;
+import net;
+
+fn main(): int {
+    var socket = create_socket();
+
+    print("Created client socket");
+
+    var status = connect_socket(socket);
+
+    print("Connected to socket");
+
+    var sent = send_data(socket, "Hello world!");
+
+    print("Sent data over the socket!");
+
+    return 0;
+}
