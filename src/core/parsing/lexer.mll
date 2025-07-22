@@ -18,12 +18,15 @@ rule read_token =
     | ")" { RPAREN }
     | "{" { LBRACE }
     | "}" { RBRACE }
+    | "[" { LBRACKET }
+    | "]" { RBRACKET }
     | ";" { SEMICOLON }
     | ":" { COLON }
     | "," { COMMA }
     | "<" { LANGLE }
     | ">" { RANGLE }
     | "=" { EQUAL }
+    | "==" { EQUAL_EQUAL }
     | "+" { PLUS }
     | "-" { MINUS }
     | "*" { MULT }

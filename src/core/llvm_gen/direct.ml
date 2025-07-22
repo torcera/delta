@@ -52,7 +52,7 @@ let bool_t = i1_type context
 let i8_t = i8_type context
 let void_t = void_type context
 
-let llvm_type ty =
+let rec llvm_type ty =
   match ty with
   | TInt -> i32_t
   | TFloat -> float_t
@@ -64,6 +64,7 @@ let llvm_type ty =
       match Hashtbl.find_opt custom_types name with
       | Some ty -> ty
       | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
+  | TArray ty -> array_type (llvm_type ty) 10
   | ty -> raise (LLVMError ("Unsupported type " ^ string_of_type ty))
 
 let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
@@ -77,7 +78,7 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   | Identifier (name, ty) -> (
       let var = find_variable name in
       match ty with
-      | TStruct _ -> var
+      | TStruct _ | TArray _ -> var
       | _ -> build_load (llvm_type ty) var name builder)
   | BinOp (op, lhs, rhs) -> (
       let lhs_val = codegen_expr lhs in
@@ -157,49 +158,93 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
     let struct_ptr = codegen_expr struct_expr in
     let field_ptr = build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name builder in
     build_load (llvm_type field_ty) field_ptr field_name builder
+  | ArrayInit (exprs, ty) ->
+      let array_ty = llvm_type ty in
+      let array_ptr = Llvm.build_alloca array_ty "array_tmp" builder in
+      List.iteri
+        (fun i expr ->
+          let expr_val = codegen_expr expr in
+          let element_ptr =
+            build_gep array_ty array_ptr [| const_int i32_t 0; const_int i32_t i |]
+              ("element" ^ string_of_int i) builder
+          in
+          ignore (Llvm.build_store expr_val element_ptr builder))
+        exprs;
+      array_ptr
+  | ArrayAccess (array_expr, index_expr, array_ty, elem_ty) ->
+      let array_ptr = codegen_expr array_expr in
+      let index_val = codegen_expr index_expr in
+      let element_ptr =
+        build_gep (llvm_type array_ty) array_ptr [| const_int i32_t 0; index_val |] "element" builder
+      in
+      build_load (llvm_type elem_ty) element_ptr "element" builder
 
 let rec codegen_stmt (stmt : Typed_ast.stmt) : llvalue option =
   match stmt with
   | ExprStmt expr ->
       ignore (codegen_expr expr);
       None
-  | IfStmt (cond, then_stmt, else_stmt) ->
-      let cond_val = codegen_expr cond in
-      let zero = const_int bool_t 0 in
-      let cond_bool = build_icmp Icmp.Ne cond_val zero "ifcond" builder in
-      let start_bb = insertion_block builder in
-      let func = block_parent start_bb in
-      let then_bb = append_block context "then" func in
-      let else_bb = append_block context "else" func in
-      let merge_bb = append_block context "ifcont" func in
-      ignore (build_cond_br cond_bool then_bb else_bb builder);
+| IfStmt (cond, then_stmt, else_stmt) ->
+    let cond_val = codegen_expr cond in
+    let zero = const_int bool_t 0 in
+    let cond_bool = build_icmp Icmp.Ne cond_val zero "ifcond" builder in
+    let start_bb = insertion_block builder in
+    let func = block_parent start_bb in
+    let then_bb = append_block context "then" func in
+    let else_bb = append_block context "else" func in
+    let merge_bb = append_block context "ifcont" func in
+    ignore (build_cond_br cond_bool then_bb else_bb builder);
 
-      (* Then block *)
-      position_at_end then_bb builder;
-      enter_scope ();
-      let then_val = codegen_stmt then_stmt in
-      exit_scope ();
+    (* Then block *)
+    position_at_end then_bb builder;
+    enter_scope ();
+    let then_val = codegen_stmt then_stmt in
+    exit_scope ();
+    (* If then block does NOT end with a terminator, add branch to merge *)
+    if Llvm.block_terminator then_bb = None then
       ignore (build_br merge_bb builder);
-      let then_bb_end = insertion_block builder in
+    let then_bb_end = insertion_block builder in
 
-      (* Else block *)
-      position_at_end else_bb builder;
-      enter_scope ();
-      let else_val = codegen_stmt else_stmt in
-      exit_scope ();
+    (* Else block *)
+    position_at_end else_bb builder;
+    enter_scope ();
+    let else_val = codegen_stmt else_stmt in
+    exit_scope ();
+    (* If else block does NOT end with a terminator, add branch to merge *)
+    if Llvm.block_terminator else_bb = None then
       ignore (build_br merge_bb builder);
-      let else_bb_end = insertion_block builder in
+    let else_bb_end = insertion_block builder in
 
-      (* Merge block *)
-      position_at_end merge_bb builder;
-      let then_val = Option.value then_val ~default:(const_null i32_t) in
-      let else_val = Option.value else_val ~default:(const_null i32_t) in
-      ignore
-        (build_phi
-           [ (then_val, then_bb_end); (else_val, else_bb_end) ]
-           "iftmp" builder);
-      (* TODO: Check if then_val or else_val returns *)
-      None
+    (* Merge block *)
+    position_at_end merge_bb builder;
+
+    (* Determine which blocks actually branch to merge_bb *)
+    let incoming = [] in
+    let incoming =
+      if
+        match Llvm.block_terminator then_bb with
+        | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
+            Array.exists ((=) merge_bb) (Llvm.successors term)
+        | _ -> false
+      then (Option.value then_val ~default:(const_null i32_t), then_bb_end) :: incoming
+      else incoming
+    in
+    let incoming =
+      if
+        match Llvm.block_terminator else_bb with
+        | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
+            Array.exists ((=) merge_bb) (Llvm.successors term)
+        | _ -> false
+      then (Option.value else_val ~default:(const_null i32_t), else_bb_end) :: incoming
+      else incoming
+    in
+
+    (* Build PHI only if there's at least one incoming edge *)
+    if incoming <> [] then
+      ignore (build_phi incoming "iftmp" builder);
+
+    None
+
   | ReturnStmt expr ->
       let return_val = codegen_expr expr in
       ignore (build_ret return_val builder);
@@ -266,7 +311,7 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
          let alloca = create_entry_block_alloca func name (llvm_type expr_ty) in
          let value_to_store =
            match expr_ty with
-             | TStruct _ -> build_load (llvm_type expr_ty) expr_val "tmp" builder
+             | TStruct _ | TArray _ -> build_load (llvm_type expr_ty) expr_val "tmp" builder
              | _ -> expr_val
          in
          ignore (build_store value_to_store alloca builder);

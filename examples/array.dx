@@ -1,0 +1,12 @@
+import io;
+
+fn main(): void {
+    var x = [1, 2, 3];
+    var e = x[2];
+    var res = e + 42;
+    if (res == 45) {
+        print("Correct!");
+    } else {
+        print("Incorrect");
+    }
+}

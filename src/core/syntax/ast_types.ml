@@ -11,6 +11,7 @@ type ty =
   | TVoid
   | TFunction of ty list * ty
   | TStruct of name * (name * ty) list
+  | TArray of ty
 [@@deriving show, eq]
 
 type param = name * ty [@@deriving show, eq]
@@ -60,3 +61,4 @@ let string_of_type (t : ty) : string =
   | TVoid -> "Unit"
   | TFunction _ -> "Function"
   | TStruct _ -> "Struct"
+  | TArray _ -> "Array"

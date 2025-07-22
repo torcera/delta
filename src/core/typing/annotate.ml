@@ -144,6 +144,29 @@ let rec annotate_expr (env : ty Env.StringMap.t) (expr : Parsed_ast.expr) :
             raise (TypeError ("Field " ^ field_name ^ " not found in struct type")))
     | _ ->
         raise (TypeError ("Attempted field access on non-struct type")))
+  | Parsed_ast.ArrayInit exprs ->
+    let exprs, expr_types =
+      List.split
+        (List.map
+           (fun e ->
+             let e, e_ty = annotate_expr env e in
+             (e, e_ty))
+           exprs)
+    in
+    let first_element_type = List.hd expr_types in
+    if List.for_all2 ( = ) expr_types expr_types then
+      (Typed_ast.ArrayInit (exprs, TArray first_element_type), TArray first_element_type)
+    else raise (TypeError "All elements of array must be of same type")
+  | Parsed_ast.ArrayAccess (array_expr, index_expr) ->
+    let typed_array_expr, array_expr_ty = annotate_expr env array_expr in
+    let typed_index_expr, index_expr_ty = annotate_expr env index_expr in
+    (match array_expr_ty with
+    | TArray (elem_ty) ->
+        if index_expr_ty = TInt then
+          (Typed_ast.ArrayAccess (typed_array_expr, typed_index_expr, array_expr_ty, elem_ty), elem_ty)
+        else raise (TypeError "Index expression must be of type int")
+    | _ -> raise (TypeError "Attempted array access on non-array type"))
+
 
 let rec annotate_stmt (env : ty Env.StringMap.t) (ret_ty : ty)
     (stmt : Parsed_ast.stmt) : Typed_ast.stmt =

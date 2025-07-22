@@ -14,6 +14,8 @@ type expr =
   | Call of name * expr list * ty
   | StructInit of name * (name * expr * ty) list
   | FieldAccess of expr * name * int * ty * ty
+  | ArrayInit of expr list * ty
+  | ArrayAccess of expr * expr * ty * ty
 [@@deriving show, eq]
 
 type stmt =

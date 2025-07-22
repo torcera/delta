@@ -14,9 +14,12 @@
 %token RBRACE
 %token LANGLE
 %token RANGLE
+%token LBRACKET
+%token RBRACKET
 %token SEMICOLON
 %token COLON
 %token COMMA
+%token EQUAL_EQUAL
 %token EQUAL
 %token PLUS
 %token MINUS
@@ -51,7 +54,7 @@
 %left PLUS MINUS LANGLE RANGLE
 %left MULT DIV REM
 %left AND OR
-%nonassoc BANG
+%nonassoc BANG EQUAL_EQUAL
 
 %start <Parsed_ast.program> program
 
@@ -73,6 +76,8 @@ expr:
     | name=ID; LPAREN; args=separated_list(COMMA, expr); RPAREN { Call(name, args) }
     | struct_name=ID; LBRACE; fields=separated_list(COMMA, struct_field); RBRACE { StructInit(struct_name, fields) }
     | struct_expr=expr; DOT; field_name=ID { FieldAccess(struct_expr, field_name) }
+    | LBRACKET; elements=separated_list(COMMA, expr); RBRACKET { ArrayInit(elements) }
+    | array_expr=expr; LBRACKET; element_index=expr; RBRACKET { ArrayAccess(array_expr, element_index) }
     ;
 
 stmt:
@@ -137,6 +142,6 @@ ty:
     | RANGLE EQUAL { BinOpGreaterThanEqual }
     | AND { BinOpAnd }
     | OR { BinOpOr }
-    | EQUAL EQUAL { BinOpEqual }
+    | EQUAL_EQUAL { BinOpEqual }
     | BANG EQUAL { BinOpNotEqual }
     ;

@@ -2,7 +2,8 @@
 
 ## TODO
 
-- [ ] If statement early return
+- [x] If statement early return
 - [x] Structs
-- [ ] Strings / chars
+- [x] Arrays
+- [x] Strings / chars
 - [ ] GC
