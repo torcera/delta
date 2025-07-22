@@ -11,6 +11,8 @@ let builder = builder context
 let named_value_scopes : (string, llvalue) Hashtbl.t list ref =
   ref [ Hashtbl.create 10 ]
 
+let custom_types : (string, lltype) Hashtbl.t = Hashtbl.create 10
+
 let enter_scope () =
   named_value_scopes := Hashtbl.create 10 :: !named_value_scopes
 
@@ -58,6 +60,10 @@ let llvm_type ty =
   | TString -> pointer_type context
   | TChar -> i8_t
   | TVoid -> void_type context
+  | TStruct (name, _fields) -> (
+      match Hashtbl.find_opt custom_types name with
+      | Some ty -> ty
+      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
   | ty -> raise (LLVMError ("Unsupported type " ^ string_of_type ty))
 
 let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
@@ -66,11 +72,13 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   | Float f -> const_float float_t f
   | Bool b -> const_int bool_t (if b then 1 else 0)
   | Char c -> const_int i8_t (Char.code c)
-  | String s -> const_string context s
+  | String s -> build_global_stringptr s "str" builder
   | Void -> const_null void_t
-  | Identifier (name, ty) ->
+  | Identifier (name, ty) -> (
       let var = find_variable name in
-      build_load (llvm_type ty) var name builder
+      match ty with
+      | TStruct _ -> var
+      | _ -> build_load (llvm_type ty) var name builder)
   | BinOp (op, lhs, rhs) -> (
       let lhs_val = codegen_expr lhs in
       let rhs_val = codegen_expr rhs in
@@ -120,7 +128,35 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
               (Array.of_list (List.map llvm_type param_types))
         | _ -> raise (LLVMError "Invalid function type")
       in
-      build_call func_type callee args "calltmp" builder
+      let call_inst = build_call func_type callee args "" builder in
+      if type_of call_inst |> classify_type = TypeKind.Void then
+        call_inst
+      else (
+        set_value_name "calltmp" call_inst;
+        call_inst
+      )
+  | StructInit (name, fields) ->
+      (* Note: name is struct name, not variable name! *)
+      let struct_ty =
+        try Hashtbl.find custom_types name
+        with Not_found -> raise (Failure ("Unknown struct type: " ^ name))
+      in
+      let struct_ptr = Llvm.build_alloca struct_ty "struct_tmp" builder in
+      List.iteri
+        (fun i (_, expr, _) ->
+          let field_val = codegen_expr expr in
+          let field_ptr =
+            build_struct_gep struct_ty struct_ptr i
+              ("field" ^ string_of_int i)
+              builder
+          in
+          ignore (Llvm.build_store field_val field_ptr builder))
+        fields;
+      struct_ptr
+  | FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) ->
+    let struct_ptr = codegen_expr struct_expr in
+    let field_ptr = build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name builder in
+    build_load (llvm_type field_ty) field_ptr field_name builder
 
 let rec codegen_stmt (stmt : Typed_ast.stmt) : llvalue option =
   match stmt with
@@ -231,8 +267,22 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
          print_endline ("--- Generating code for local variable: " ^ name);
          let func = block_parent (insertion_block builder) in
          let alloca = create_entry_block_alloca func name (llvm_type expr_ty) in
-         ignore (build_store expr_val alloca builder);
+         let value_to_store =
+           match expr_ty with
+             | TStruct _ -> build_load (llvm_type expr_ty) expr_val "tmp" builder
+             | _ -> expr_val
+         in
+         ignore (build_store value_to_store alloca builder);
          add_local name alloca));
+      None
+  | StructDecl (name, fields) ->
+      print_endline ("--- Generating code for struct: " ^ name);
+      let field_types =
+        List.map (fun (_name, field_ty) -> llvm_type field_ty) fields
+      in
+      let struct_type = named_struct_type context name in
+      struct_set_body struct_type (Array.of_list field_types) false;
+      Hashtbl.add custom_types name struct_type;
       None
   | FuncDecl (name, params, body, ret_ty) ->
       print_endline ("--- Generating code for function: " ^ name);
@@ -268,6 +318,15 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
         | None -> ignore (build_ret_void builder));
 
       Llvm_analysis.assert_valid_function func;
+      None
+  | ExternDecl (name, params, ret_ty) ->
+      print_endline ("--- Generating code for extern function: " ^ name);
+      let llvm_ret_type = llvm_type ret_ty in
+      let llvm_param_types =
+        Array.of_list (List.map (fun (_pname, ty) -> llvm_type ty) params)
+      in
+      let func_type = function_type llvm_ret_type llvm_param_types in
+      ignore (declare_function name func_type delta_module);
       None
 
 let codegen_program (program : Typed_ast.program) : unit =

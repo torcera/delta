@@ -12,6 +12,8 @@ type expr =
   | UnOp of un_op * expr
   | Assign of name * expr
   | Call of name * expr list
+  | StructInit of name * (name * expr) list
+  | FieldAccess of expr * name
 [@@deriving show, eq]
 
 type stmt =
@@ -26,7 +28,9 @@ type stmt =
 
 and decl =
   | FuncDecl of name * (name * ty) list * decl list * ty
+  | ExternDecl of name * (name * ty) list * ty
   | VarDecl of name * expr
+  | StructDecl of name * (name * ty) list
   | Statement of stmt
 [@@deriving show, eq]
 

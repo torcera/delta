@@ -30,6 +30,13 @@ and load_module (module_name : string) : Parsed_ast.decl list =
       let resolved_ast = resolve_imports parsed_ast in
       let decls = match resolved_ast with Parsed_ast.Program decls -> decls in
       decls
+  | "io" ->
+      let content = read_file "src/stdlib/io/io.dx" in
+      let lexbuf = Lexing.from_string content in
+      let parsed_ast = Parser.program Lexer.read_token lexbuf in
+      let resolved_ast = resolve_imports parsed_ast in
+      let decls = match resolved_ast with Parsed_ast.Program decls -> decls in
+      decls
   | "net" ->
       let content = read_file "src/stdlib/net/net.dx" in
       let lexbuf = Lexing.from_string content in

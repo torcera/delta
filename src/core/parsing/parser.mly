@@ -42,7 +42,10 @@
 %token RETURN
 %token PRINT
 %token WHILE
+%token STRUCT
 %token IMPORT
+%token DOT
+%token EXTERN
 %token EOF
 
 %right EQUAL
@@ -69,6 +72,8 @@ expr:
     | e1=expr op=bin_op e2=expr { BinOp(op, e1, e2) }
     | name=ID; EQUAL; value_expr=expr { Assign(name, value_expr) }
     | name=ID; LPAREN; args=separated_list(COMMA, expr); RPAREN { Call(name, args) }
+    | struct_name=ID; LBRACE; fields=separated_list(COMMA, struct_field); RBRACE { StructInit(struct_name, fields) }
+    | struct_expr=expr; DOT; field_name=ID { FieldAccess(struct_expr, field_name) }
     ;
 
 stmt:
@@ -77,7 +82,7 @@ stmt:
     | WHILE; LPAREN; cond_expr=expr; RPAREN; body=stmt { WhileStmt(cond_expr, body) }
     | RETURN; expr=expr; SEMICOLON { ReturnStmt(expr) }
     | PRINT; expr=expr; SEMICOLON { PrintStmt(expr) }
-    | IMPORT; module_name=ID; { Import(module_name) }
+    | IMPORT; module_name=ID; SEMICOLON { Import(module_name) }
     | b=block { Block(b) }
     ;
 
@@ -91,9 +96,18 @@ param:
 
 decl:
     | FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; COLON; return_type=ty; body=block { FuncDecl (name, params, body, return_type) }
+    | EXTERN; FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; COLON; return_type=ty; SEMICOLON { ExternDecl (name, params, return_type) }
     | VAR; name=ID; EQUAL; e=expr; SEMICOLON { VarDecl(name, e) }
+    | STRUCT; name=ID; LBRACE; fields=list(struct_field_decl); RBRACE { StructDecl (name, fields) }
     | s=stmt { Statement(s) }
     ;
+
+struct_field:
+    | name=ID; COLON; e=expr { (name, e) }
+    ;
+
+struct_field_decl:
+    | name=ID; COLON; ty=ty; SEMICOLON { (name, ty) }
 
 program:
     | decls=list(decl); EOF { Program(decls) }

@@ -12,5 +12,8 @@ filename=$1
 # Run the diablo compiler
 dune exec -- delta $filename
 
+# Compile the runtime
+gcc -shared -fPIC -o libruntime.so src/runtime/net/socket.c
+
 # Run the LLVM compiler
-clang-19 -target x86_64-pc-linux-gnu llvm_bin/output.ll -o llvm_bin/output
+clang-19 -target x86_64-pc-linux-gnu llvm_bin/output.ll -o llvm_bin/output -L. -lruntime -Wl,-rpath=.

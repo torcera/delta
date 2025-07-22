@@ -1,0 +1,19 @@
+import net;
+
+fn main(): int {
+    var server_sock = create_socket();
+
+    if (bind_socket(server_sock) < 0) {
+        close_socket(server_sock);
+    } else {}
+
+    if (listen_socket(server_sock) < 0) {
+        close_socket(server_sock);
+    } else {}
+
+    var client_sock = accept_connection(server_sock);
+
+    close_socket(server_sock);
+
+    return 0;
+}

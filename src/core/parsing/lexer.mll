@@ -49,6 +49,9 @@ rule read_token =
     | "import" { IMPORT }
     | "return" { RETURN }
     | "print" { PRINT }
+    | "extern" { EXTERN }
+    | "struct" { STRUCT }
+    | "." { DOT }
     | whitespace { read_token lexbuf }
     | "#" { read_comment lexbuf }
     | float { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }

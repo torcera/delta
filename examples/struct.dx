@@ -1,0 +1,16 @@
+struct Person {
+    age: int;
+    quantity: int;
+    verified: bool;
+}
+
+fn main(): int {
+    var p = Person { age: 21, quantity: 5, verified: true };
+    var x = p.quantity;
+    if (!p.verified) {
+        x = x + 5;
+    } else {
+        x = x + 1;
+    }
+    return x;
+}

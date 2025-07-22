@@ -85,6 +85,65 @@ let rec annotate_expr (env : ty Env.StringMap.t) (expr : Parsed_ast.expr) :
             raise
               (TypeError "Number of arguments does not match function signature")
       | _ -> raise (TypeError (name ^ " is not a function")))
+  | Parsed_ast.StructInit (name, fields) ->
+      let struct_ty =
+        try Env.lookup env name
+        with Not_found -> raise (TypeError ("Struct " ^ name ^ " not found"))
+      in
+      let expected_fields =
+        match struct_ty with
+        | TStruct (_, fields) -> fields
+        | _ -> raise (TypeError (name ^ " is not a struct type"))
+      in
+      let typed_fields =
+        List.map
+          (fun (field_name, expr) ->
+            match List.assoc_opt field_name expected_fields with
+            | None ->
+                raise
+                  (TypeError
+                     ("Field " ^ field_name ^ " not found in struct " ^ name))
+            | Some expected_ty ->
+                let typed_expr, expr_ty = annotate_expr env expr in
+                if expr_ty = expected_ty then (field_name, typed_expr, expr_ty)
+                else
+                  raise
+                    (TypeError
+                       ("Type mismatch in field " ^ field_name ^ ": expected "
+                      ^ show_ty expected_ty ^ ", got " ^ show_ty expr_ty)))
+          fields
+      in
+      (* Optional: ensure no extra or missing fields *)
+      let field_names_provided = List.map fst fields in
+      let expected_field_names = List.map fst expected_fields in
+      if
+        List.sort compare field_names_provided
+        = List.sort compare expected_field_names
+      then (Typed_ast.StructInit (name, typed_fields), struct_ty)
+      else
+        raise (TypeError "Struct initialization does not match expected fields")
+| Parsed_ast.FieldAccess (struct_expr, field_name) ->
+    let typed_struct_expr, struct_expr_ty = annotate_expr env struct_expr in
+    (match struct_expr_ty with
+    | TStruct (_, fields) -> (
+        match List.assoc_opt field_name fields with
+        | Some field_ty ->
+            (* find index of field_name in fields *)
+            let field_index =
+              let rec find_index lst idx =
+                match lst with
+                | [] -> raise (TypeError ("Field " ^ field_name ^ " not found in struct type"))
+                | (fname, _) :: rest ->
+                    if fname = field_name then idx else find_index rest (idx + 1)
+              in
+              find_index fields 0
+            in
+            ( Typed_ast.FieldAccess (typed_struct_expr, field_name, field_index, struct_expr_ty, field_ty),
+              field_ty )
+        | None ->
+            raise (TypeError ("Field " ^ field_name ^ " not found in struct type")))
+    | _ ->
+        raise (TypeError ("Attempted field access on non-struct type")))
 
 let rec annotate_stmt (env : ty Env.StringMap.t) (ret_ty : ty)
     (stmt : Parsed_ast.stmt) : Typed_ast.stmt =
@@ -132,28 +191,36 @@ and check_block (env : ty Env.StringMap.t) (ret_ty : ty)
         | Parsed_ast.Statement stmt ->
             let typed_stmt = annotate_stmt env ret_ty stmt in
             (Typed_ast.Statement typed_stmt :: typed_decls, env)
-        | Parsed_ast.FuncDecl _ ->
+        | Parsed_ast.StructDecl (name, fields) ->
+            let env' = Env.extend env name (TStruct (name, fields)) in
+            (Typed_ast.StructDecl (name, fields) :: typed_decls, env')
+        | Parsed_ast.FuncDecl _ | Parsed_ast.ExternDecl _ ->
             raise (TypeError "Function declaration not allowed in block"))
       ([], env) decls
   in
   (List.rev typed_decls, env')
 
-let build_func_declarations (decls : Parsed_ast.decl list) : ty Env.StringMap.t
-    =
+let build_top_level_declarations (decls : Parsed_ast.decl list) :
+    ty Env.StringMap.t =
   List.fold_left
     (fun env decl ->
       match decl with
       | Parsed_ast.FuncDecl (name, params, _, ret_ty) ->
           let sig_ = TFunction (List.map snd params, ret_ty) in
           Env.extend env name sig_
+      | Parsed_ast.ExternDecl (name, params, ret_ty) ->
+          let sig_ = TFunction (List.map snd params, ret_ty) in
+          Env.extend env name sig_
       | Parsed_ast.VarDecl (name, expr) ->
           let _typed_expr, expr_ty = annotate_expr env expr in
           Env.extend env name expr_ty
+      | Parsed_ast.StructDecl (name, fields) ->
+          Env.extend env name (TStruct (name, fields))
       | _ -> env)
     Env.empty_env decls
 
-let type_check_program (Parsed_ast.Program decls) : Typed_ast.program =
-  let env = build_func_declarations decls in
+let annotate_program (Parsed_ast.Program decls) : Typed_ast.program =
+  let env = build_top_level_declarations decls in
   let typed_decls =
     List.map
       (function
@@ -166,12 +233,16 @@ let type_check_program (Parsed_ast.Program decls) : Typed_ast.program =
             in
             let typed_body, _ = check_block param_env ret_ty body in
             Typed_ast.FuncDecl (name, params, typed_body, ret_ty)
+        | Parsed_ast.ExternDecl (name, params, ret_ty) ->
+            Typed_ast.ExternDecl (name, params, ret_ty)
         | Parsed_ast.VarDecl (name, expr) ->
             let typed_expr, expr_ty = annotate_expr env expr in
             Typed_ast.VarDecl (name, typed_expr, expr_ty)
         | Parsed_ast.Statement stmt ->
             let typed_stmt = annotate_stmt env TVoid stmt in
-            Typed_ast.Statement typed_stmt)
+            Typed_ast.Statement typed_stmt
+        | Parsed_ast.StructDecl (name, fields) ->
+            Typed_ast.StructDecl (name, fields))
       decls
   in
   Typed_ast.Program typed_decls

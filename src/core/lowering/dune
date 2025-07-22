@@ -1,5 +1,0 @@
-(library
- (name lowering)
- (libraries typing)
- (preprocess
-  (pps ppx_deriving.show ppx_deriving.eq)))

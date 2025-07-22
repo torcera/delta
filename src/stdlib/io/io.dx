@@ -1,0 +1,1 @@
+extern fn pputs(s str): void;
