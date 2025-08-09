@@ -1,1 +1,1 @@
-extern fn print(s str): void;
+extern fn print(s: str) -> void;

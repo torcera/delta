@@ -1,0 +1,28 @@
+import io;
+
+fn route(path: str, handler: fn() -> str) -> str {
+    if (path == "/hello") {
+        var response = handler();
+        return response;
+    } else {
+        return "<h1>404 Not Found</h1>";
+    }
+
+    return "Never";
+}
+
+fn handle_hello() -> str {
+    return "<h1>Hello World</h1>";
+}
+
+fn handle_about() -> str {
+    return "<h1>About</h1>";
+}
+
+fn main() -> void {
+    var response = route("/hello", handle_hello);
+    print(response);
+
+    var not_found = route("/about", handle_about);
+    print(not_found);
+}

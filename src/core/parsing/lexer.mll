@@ -23,6 +23,7 @@ rule read_token =
     | ";" { SEMICOLON }
     | ":" { COLON }
     | "," { COMMA }
+    | "->" { ARROW }
     | "<" { LANGLE }
     | ">" { RANGLE }
     | "=" { EQUAL }

@@ -1,0 +1,27 @@
+var routes = map<string, fn() -> string>{};
+
+fn route(path: string, handler: fn() -> string) -> void {
+    routes[path] = handler;
+}
+
+fn dispatch(path: string) -> string {
+    if (path in routes) {
+        return routes[path]();
+    } else {
+        return "404 Not Found";
+    }
+}
+
+fn hello() -> string {
+    return "Hello, world!";
+}
+
+fn main() -> void {
+    route("/hello", hello);
+
+    var response = dispatch("/hello");
+    print(response);  // should print: Hello, world!
+
+    var notFound = dispatch("/unknown");
+    print(notFound);  // should print: 404 Not Found
+}

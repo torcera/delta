@@ -11,7 +11,7 @@ type expr =
   | BinOp of bin_op * expr * expr
   | UnOp of un_op * expr
   | Assign of name * expr
-  | Call of name * expr list * ty
+  | Call of expr * expr list * ty
   | StructInit of name * (name * expr * ty) list
   | FieldAccess of expr * name * int * ty * ty
   | ArrayInit of expr list * ty

@@ -19,6 +19,7 @@
 %token SEMICOLON
 %token COLON
 %token COMMA
+%token ARROW
 %token EQUAL_EQUAL
 %token EQUAL
 %token PLUS
@@ -73,7 +74,7 @@ expr:
     | op=un_op e=expr { UnOp(op, e) }
     | e1=expr op=bin_op e2=expr { BinOp(op, e1, e2) }
     | name=ID; EQUAL; value_expr=expr { Assign(name, value_expr) }
-    | name=ID; LPAREN; args=separated_list(COMMA, expr); RPAREN { Call(name, args) }
+    | name=expr; LPAREN; args=separated_list(COMMA, expr); RPAREN { Call(name, args) }
     | struct_name=ID; LBRACE; fields=separated_list(COMMA, struct_field); RBRACE { StructInit(struct_name, fields) }
     | struct_expr=expr; DOT; field_name=ID { FieldAccess(struct_expr, field_name) }
     | LBRACKET; elements=separated_list(COMMA, expr); RBRACKET { ArrayInit(elements) }
@@ -94,12 +95,12 @@ block:
     ;
 
 param:
-    | name=ID; ty=ty { (name, ty) }
+    | name=ID; COLON; ty=ty { (name, ty) }
     ;
 
 decl:
-    | FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; COLON; return_type=ty; body=block { FuncDecl (name, params, body, return_type) }
-    | EXTERN; FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; COLON; return_type=ty; SEMICOLON { ExternDecl (name, params, return_type) }
+    | FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; ARROW; return_type=ty; body=block { FuncDecl (name, params, body, return_type) }
+    | EXTERN; FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; ARROW; return_type=ty; SEMICOLON { ExternDecl (name, params, return_type) }
     | VAR; name=ID; EQUAL; e=expr; SEMICOLON { VarDecl(name, e) }
     | STRUCT; name=ID; LBRACE; fields=list(struct_field_decl); RBRACE { StructDecl (name, fields) }
     | s=stmt { Statement(s) }
@@ -124,6 +125,7 @@ ty:
     | TYPE_STRING { TString }
     | TYPE_VOID { TVoid }
     | ty=ty; LBRACKET; RBRACKET { TArray(ty) }
+    | FUNCTION; LPAREN; params=separated_list(COMMA, ty); RPAREN; ARROW; ret=ty { TFunction(params, ret) }
     ;
 
 %inline un_op:

@@ -1,0 +1,11 @@
+fn add(x: int) -> int {
+    return x + 1;
+}
+
+fn dispatch (f: fn(int) -> int) -> int {
+    return f(1) + 1;
+}
+
+fn main() -> void {
+    var x = dispatch(add);
+}

@@ -65,7 +65,7 @@ let rec llvm_type ty =
       | Some ty -> ty
       | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
   | TArray ty -> array_type (llvm_type ty) 10
-  | ty -> raise (LLVMError ("Unsupported type " ^ string_of_type ty))
+  | TFunction (_, _) -> pointer_type context
 
 let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   match expr with
@@ -76,10 +76,15 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   | String s -> build_global_stringptr s "str" builder
   | Void -> const_null void_t
   | Identifier (name, ty) -> (
+    try
       let var = find_variable name in
       match ty with
       | TStruct _ | TArray _ -> var
-      | _ -> build_load (llvm_type ty) var name builder)
+      | _ -> build_load (llvm_type ty) var name builder
+    with LLVMError _ ->
+      match lookup_function name delta_module with
+      | Some func -> func
+      | None -> raise (LLVMError ("Function " ^ name ^ " not found")))
   | BinOp (op, lhs, rhs) -> (
       let lhs_val = codegen_expr lhs in
       let rhs_val = codegen_expr rhs in
@@ -108,19 +113,42 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       let expr_val = codegen_expr expr in
       let var = find_variable name in
       build_store expr_val var builder
-  | Call (func_name, args, func_type) ->
-      let callee =
+  | Call (func_expr, args, func_type) ->
+      (* let callee =
         match lookup_function func_name delta_module with
         | Some callee -> callee
         | None ->
             raise (LLVMError ("Unknown function referenced: " ^ func_name))
+      in *)
+
+      let func_val = codegen_expr func_expr in
+      let arg_vals = List.map codegen_expr args in
+
+      let (param_types, return_type) =
+        match func_type with
+        | TFunction (param_types, return_type) -> (param_types, return_type)
+        | _ -> raise (LLVMError "Invalid function type")
       in
-      let params = params callee in
+
+      let expected_arg_count = List.length param_types in
+      if List.length args <> expected_arg_count then
+        raise
+          (LLVMError
+             (Printf.sprintf "Expected %d arguments, got %d"
+                expected_arg_count (List.length args)));
+
+      let llvm_func_ty =
+        function_type (llvm_type return_type)
+          (Array.of_list (List.map llvm_type param_types))
+      in
+(* 
+      let params = params func_val in
       if Array.length params <> List.length args then
         raise
           (LLVMError
              (Printf.sprintf "Expected %d arguments, got %d"
                 (Array.length params) (List.length args)));
+    
       let args = Array.of_list (List.map codegen_expr args) in
       let func_type =
         match func_type with
@@ -128,8 +156,8 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
             function_type (llvm_type return_type)
               (Array.of_list (List.map llvm_type param_types))
         | _ -> raise (LLVMError "Invalid function type")
-      in
-      let call_inst = build_call func_type callee args "" builder in
+      in *)
+      let call_inst = build_call llvm_func_ty func_val (Array.of_list arg_vals) "" builder in
       if type_of call_inst |> classify_type = TypeKind.Void then
         call_inst
       else (

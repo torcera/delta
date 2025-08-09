@@ -60,12 +60,13 @@ let rec annotate_expr (env : ty Env.StringMap.t) (expr : Parsed_ast.expr) :
       let typed_expr, expr_ty = annotate_expr env expr in
       if var_ty = expr_ty then (Typed_ast.Assign (name, typed_expr), var_ty)
       else raise (TypeError "Type mismatch in assignment")
-  | Parsed_ast.Call (name, args) -> (
-      let func =
+  | Parsed_ast.Call (func_expr, args) -> (
+      (* let func =
         try Env.lookup env name
         with Not_found ->
           raise (TypeError ("Function " ^ name ^ " not found"))
-      in
+      in *)
+      let typed_func_expr, func = annotate_expr env func_expr in
       match func with
       | TFunction (param_types, return_type) ->
           if List.length args = List.length param_types then
@@ -78,13 +79,13 @@ let rec annotate_expr (env : ty Env.StringMap.t) (expr : Parsed_ast.expr) :
                    args)
             in
             if List.for_all2 ( = ) arg_types param_types then
-              ( Typed_ast.Call (name, args, TFunction (param_types, return_type)),
+              ( Typed_ast.Call (typed_func_expr, args, TFunction (param_types, return_type)),
                 return_type )
             else raise (TypeError "Arguments of Call must be of same type")
           else
             raise
               (TypeError "Number of arguments does not match function signature")
-      | _ -> raise (TypeError (name ^ " is not a function")))
+      | _ -> raise (TypeError ("Attempted to call a non-function expression")))
   | Parsed_ast.StructInit (name, fields) ->
       let struct_ty =
         try Env.lookup env name
