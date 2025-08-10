@@ -2,7 +2,7 @@ open Parsing
 open Resolution
 open Lexing
 open Typing
-open Llvm_gen
+open Codegen
 
 let print_position lexbuf =
   let pos = lexbuf.lex_curr_p in

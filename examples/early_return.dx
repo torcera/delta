@@ -1,6 +1,6 @@
 import io;
 
-fn compute(): int {
+fn compute() -> int {
     var x = 3;
     if (x == 1) {
         return 1;
@@ -10,7 +10,7 @@ fn compute(): int {
     return x;
 }
 
-fn main(): int {
+fn main() -> int {
     var res = compute();
     if (res == 15) {
         print("TRUE");

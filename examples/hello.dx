@@ -1,14 +1,14 @@
 var global = 1;
 
-fn check(x int): bool {
+fn check(x: int) -> bool {
     return (2 / 2 + 1 * 42 % 5) == 0;
 }
 
-fn foo(a int, b int): int {
+fn foo(a: int, b: int) -> int {
     return a + b + global;
 }
 
-fn bar(a int, b int): int {
+fn bar(a: int, b: int) -> int {
     var x = 1;
     while (x < 5) {
         if (((x % 2) == 0) and check(3)) {
@@ -21,6 +21,6 @@ fn bar(a int, b int): int {
     return foo(a, x) + foo(x, b);
 }
 
-fn main(): void {
+fn main() -> void {
     var x = bar(1, 2);
 }

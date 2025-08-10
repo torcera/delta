@@ -9,11 +9,6 @@
 #define PORT 8080
 #define BACKLOG 5
 
-// TODO: Move to IO
-void print(char *str) {
-    printf("%s\n", str);
-}
-
 int create_socket() {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {

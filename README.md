@@ -2,7 +2,7 @@
 
 Delta is a statically typed, imperative language that uses LLVM as its backend.
 
-## TODO
+## Features
 
 - [x] Struct access
 - [ ] String allocation / array of chars
