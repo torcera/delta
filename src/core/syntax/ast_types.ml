@@ -13,9 +13,7 @@ type ty =
   | TNamed of name
 [@@deriving show, eq]
 
-type type_def =
-  | StructDef of (string * ty) list
-
+type type_def = StructDef of (string * ty) list
 type param = name * ty [@@deriving show, eq]
 
 type bin_op =
@@ -67,5 +65,4 @@ let string_of_type (t : ty) : string =
   | TNamed name -> name
 
 let string_of_type_def (t : type_def) : string =
-  match t with
-  | StructDef _ -> "Struct"
+  match t with StructDef _ -> "Struct"

@@ -56,8 +56,10 @@ let void_t = void_type context
 let dyn_array_type () =
   struct_type context
     [|
-      i32_t; (* length *)
-      i32_t; (* capacity *)
+      i32_t;
+      (* length *)
+      i32_t;
+      (* capacity *)
       pointer_type context (* data *);
     |]
 
@@ -91,8 +93,7 @@ let llvm_type ty =
   | TNamed name -> (
       match Hashtbl.find_opt custom_types name with
       | Some ty -> ty
-      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found"))
-  )
+      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
   (* | TStruct (name, _fields) -> (
       match Hashtbl.find_opt custom_types name with
       | Some ty -> ty
@@ -155,7 +156,7 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       let expr_val = codegen_expr expr in
       let var = find_variable name in
       build_store expr_val var builder
-  | Call (func_expr, args, func_type) ->
+  | Call (func_expr, args, _ret_type) ->
       (* let callee =
         match lookup_function func_name delta_module with
         | Some callee -> callee
@@ -165,8 +166,11 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       let func_val = codegen_expr func_expr in
       (* let arg_vals = List.map codegen_expr args in *)
       let param_types, return_type =
-        match func_type with
-        | TFunction (param_types, return_type) -> (param_types, return_type)
+        match func_expr with
+        | Identifier (_name, func_type) -> (
+            match func_type with
+            | TFunction (param_types, return_type) -> (param_types, return_type)
+            | _ -> raise (LLVMError "Invalid function type"))
         | _ -> raise (LLVMError "Invalid function type")
       in
 
@@ -176,8 +180,8 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
             let arg_val = codegen_expr arg in
             match param_ty with
             | TNamed _ ->
-              (* This loads struct from pointer to pass by copy instead of reference *)
-              build_load (llvm_type param_ty) arg_val "named_arg" builder
+                (* This loads struct from pointer to pass by copy instead of reference *)
+                build_load (llvm_type param_ty) arg_val "named_arg" builder
             | _ -> arg_val)
           args param_types
       in
@@ -242,29 +246,29 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
         fields;
       let struct_val = build_load struct_ty struct_ptr "struct_val" builder in
       struct_val
-| FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) ->
-    let struct_val = codegen_expr struct_expr in
-    let struct_ptr =
-      if Llvm.classify_type (Llvm.type_of struct_val) = TypeKind.Pointer then
-        struct_val
-      else
-        (* Allocate space and store the struct to get a pointer *)
-        let ptr = build_alloca (llvm_type struct_ty) "struct_tmp" builder in
-        ignore (build_store struct_val ptr builder);
-        ptr
-    in
-    let field_ptr =
-      build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name
-        builder
-    in
-    (* For pointer types like array or nested struct, return the pointer directly *)
-    (match field_ty with
-    | TArray _ | TNamed _ ->
-        (* Avoid loading so the caller can decide how to use the pointer *)
-        field_ptr
-    | _ ->
-        (* Load primitive field values (int, float, bool, etc.) *)
-        build_load (llvm_type field_ty) field_ptr field_name builder)
+  | FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) -> (
+      let struct_val = codegen_expr struct_expr in
+      let struct_ptr =
+        if Llvm.classify_type (Llvm.type_of struct_val) = TypeKind.Pointer then
+          struct_val
+        else
+          (* Allocate space and store the struct to get a pointer *)
+          let ptr = build_alloca (llvm_type struct_ty) "struct_tmp" builder in
+          ignore (build_store struct_val ptr builder);
+          ptr
+      in
+      let field_ptr =
+        build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name
+          builder
+      in
+      (* For pointer types like array or nested struct, return the pointer directly *)
+      match field_ty with
+      | TArray _ | TNamed _ ->
+          (* Avoid loading so the caller can decide how to use the pointer *)
+          field_ptr
+      | _ ->
+          (* Load primitive field values (int, float, bool, etc.) *)
+          build_load (llvm_type field_ty) field_ptr field_name builder)
   | ArrayInit (exprs, array_ty) ->
       ignore (Printf.printf "ArrayInit: %s\n" (string_of_type array_ty));
       let num_elems = List.length exprs in
@@ -316,8 +320,7 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
                 (* If it's a pointer, load the struct/array value it points to *)
                 if classify_type (Llvm.type_of value) = TypeKind.Pointer then
                   build_load (llvm_type first_elem_ty) value "tmp_value" builder
-                else
-                  value
+                else value
             | _ -> value
           in
           let idx = const_int i32_t i in
@@ -486,11 +489,10 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
          let value_to_store =
            match expr_ty with
            | TNamed _ | TArray _ ->
-            (* Only load if expr_val is a pointer *)
-            if classify_type (Llvm.type_of expr_val) = TypeKind.Pointer then
-              build_load (llvm_type expr_ty) expr_val "tmp" builder
-            else
-              expr_val
+               (* Only load if expr_val is a pointer *)
+               if classify_type (Llvm.type_of expr_val) = TypeKind.Pointer then
+                 build_load (llvm_type expr_ty) expr_val "tmp" builder
+               else expr_val
            | _ -> expr_val
          in
          ignore (build_store value_to_store alloca builder);

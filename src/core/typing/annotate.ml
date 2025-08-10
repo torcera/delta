@@ -46,7 +46,8 @@ module Env = struct
       env ""
 end
 
-let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.StringMap.t) (expr : Parsed_ast.expr) :
+let rec annotate_expr (env : ty Env.StringMap.t)
+    (type_env : type_def TypeEnv.StringMap.t) (expr : Parsed_ast.expr) :
     Typed_ast.expr * ty =
   match expr with
   | Parsed_ast.Int i -> (Typed_ast.Int i, TInt)
@@ -107,9 +108,7 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
                    args)
             in
             if List.for_all2 ( = ) arg_types param_types then
-              ( Typed_ast.Call
-                  (typed_func_expr, args, TFunction (param_types, return_type)),
-                return_type )
+              (Typed_ast.Call (typed_func_expr, args, return_type), return_type)
             else raise (TypeError "Arguments of Call must be of same type")
           else
             raise
@@ -122,8 +121,7 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
       in *)
       let struct_ty = TNamed name in
       let expected_fields =
-        match TypeEnv.lookup type_env name with
-        | StructDef fields -> fields
+        match TypeEnv.lookup type_env name with StructDef fields -> fields
       in
       (* let expected_fields =
         match struct_ty with
@@ -165,7 +163,9 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
       else
         raise (TypeError "Struct initialization does not match expected fields")
   | Parsed_ast.FieldAccess (struct_expr, field_name) -> (
-      let typed_struct_expr, struct_expr_ty = annotate_expr env type_env struct_expr in
+      let typed_struct_expr, struct_expr_ty =
+        annotate_expr env type_env struct_expr
+      in
       match struct_expr_ty with
       (* | TStruct (_, fields) -> ( *)
       | TNamed name -> (
@@ -174,8 +174,8 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
             with Not_found ->
               raise (TypeError ("Struct " ^ name ^ " not found"))
           in *)
-          let fields = match TypeEnv.lookup type_env name with
-            | StructDef fields -> fields
+          let fields =
+            match TypeEnv.lookup type_env name with StructDef fields -> fields
           in
           (* let fields = match struct_def with StructDef fields -> fields in *)
           match List.assoc_opt field_name fields with
@@ -221,8 +221,12 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
           TArray first_element_type )
       else raise (TypeError "All elements of array must be of same type")
   | Parsed_ast.ArrayAccess (array_expr, index_expr) -> (
-      let typed_array_expr, array_expr_ty = annotate_expr env type_env array_expr in
-      let typed_index_expr, index_expr_ty = annotate_expr env type_env index_expr in
+      let typed_array_expr, array_expr_ty =
+        annotate_expr env type_env array_expr
+      in
+      let typed_index_expr, index_expr_ty =
+        annotate_expr env type_env index_expr
+      in
       match array_expr_ty with
       | TArray elem_ty ->
           if index_expr_ty = TInt then
@@ -232,21 +236,26 @@ let rec annotate_expr (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
           else raise (TypeError "Index expression must be of type int")
       | _ -> raise (TypeError "Attempted array access on non-array type"))
 
-let rec annotate_stmt (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.StringMap.t) (ret_ty : ty)
+let rec annotate_stmt (env : ty Env.StringMap.t)
+    (type_env : type_def TypeEnv.StringMap.t) (ret_ty : ty)
     (stmt : Parsed_ast.stmt) : Typed_ast.stmt =
   match stmt with
   | Parsed_ast.ExprStmt e ->
       let typed_expr, _ = annotate_expr env type_env e in
       Typed_ast.ExprStmt typed_expr
   | Parsed_ast.IfStmt (cond_expr, then_stmt, else_stmt) ->
-      let typed_cond_expr, cond_expr_ty = annotate_expr env type_env cond_expr in
+      let typed_cond_expr, cond_expr_ty =
+        annotate_expr env type_env cond_expr
+      in
       if not (cond_expr_ty = TBool) then
         raise (TypeError "Condition expression must be of type bool");
       let typed_then_stmt = annotate_stmt env type_env ret_ty then_stmt in
       let typed_else_stmt = annotate_stmt env type_env ret_ty else_stmt in
       Typed_ast.IfStmt (typed_cond_expr, typed_then_stmt, typed_else_stmt)
   | Parsed_ast.WhileStmt (cond_expr, body) ->
-      let typed_cond_expr, cond_expr_ty = annotate_expr env type_env cond_expr in
+      let typed_cond_expr, cond_expr_ty =
+        annotate_expr env type_env cond_expr
+      in
       if not (cond_expr_ty = TBool) then
         raise (TypeError "Condition expression must be of type bool");
       let typed_body_stmt = annotate_stmt env type_env ret_ty body in
@@ -257,13 +266,19 @@ let rec annotate_stmt (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.St
   | Parsed_ast.ReturnStmt e ->
       let typed_return_expr, return_expr_ty = annotate_expr env type_env e in
       if not (return_expr_ty = ret_ty) then
-        raise (TypeError "Return type mismatch");
+        raise
+          (TypeError
+             ("Return type mismatch: expected " ^ string_of_type ret_ty
+            ^ ", got "
+             ^ string_of_type return_expr_ty));
       Typed_ast.ReturnStmt typed_return_expr
   | Parsed_ast.Import _ ->
       raise (TypeError "Import statement not allowed in block")
 
-and check_block (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.StringMap.t) (ret_ty : ty)
-    (decls : Parsed_ast.decl list) : Typed_ast.decl list * ty Env.StringMap.t * type_def TypeEnv.StringMap.t =
+and check_block (env : ty Env.StringMap.t)
+    (type_env : type_def TypeEnv.StringMap.t) (ret_ty : ty)
+    (decls : Parsed_ast.decl list) :
+    Typed_ast.decl list * ty Env.StringMap.t * type_def TypeEnv.StringMap.t =
   let typed_decls, env', type_env' =
     List.fold_left
       (fun (typed_decls, env, type_env) decl ->
@@ -271,7 +286,9 @@ and check_block (env : ty Env.StringMap.t) (type_env : type_def TypeEnv.StringMa
         | Parsed_ast.VarDecl (name, expr) ->
             let typed_expr, expr_ty = annotate_expr env type_env expr in
             let env' = Env.extend env name expr_ty in
-            (Typed_ast.VarDecl (name, typed_expr, expr_ty) :: typed_decls, env', type_env)
+            ( Typed_ast.VarDecl (name, typed_expr, expr_ty) :: typed_decls,
+              env',
+              type_env )
         | Parsed_ast.Statement stmt ->
             let typed_stmt = annotate_stmt env type_env ret_ty stmt in
             (Typed_ast.Statement typed_stmt :: typed_decls, env, type_env)
@@ -300,12 +317,13 @@ let build_top_level_declarations (decls : Parsed_ast.decl list) :
           let _typed_expr, expr_ty = annotate_expr env type_env expr in
           (Env.extend env name expr_ty, type_env)
       | Parsed_ast.StructDecl (name, fields) ->
-        let env' = Env.extend env name (TNamed name) in
-        let type_env' = TypeEnv.extend type_env name (StructDef fields) in
-        (env', type_env')
+          let env' = Env.extend env name (TNamed name) in
+          let type_env' = TypeEnv.extend type_env name (StructDef fields) in
+          (env', type_env')
           (* Env.extend env name (TStruct (name, fields)) *)
       | _ -> (env, type_env))
-    (Env.empty_env, TypeEnv.empty_env) decls
+    (Env.empty_env, TypeEnv.empty_env)
+    decls
 
 let annotate_program (Parsed_ast.Program decls) : Typed_ast.program =
   let env, type_env = build_top_level_declarations decls in
