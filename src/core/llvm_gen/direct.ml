@@ -224,8 +224,15 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       in
       let struct_ptr = Llvm.build_alloca struct_ty "struct_tmp" builder in
       List.iteri
-        (fun i (_, expr, _) ->
+        (fun i (_, expr, field_ty) ->
           let field_val = codegen_expr expr in
+          let field_val =
+            match classify_type (Llvm.type_of field_val) with
+            | TypeKind.Pointer ->
+                (* Load struct/array values to store into outer struct *)
+                build_load (llvm_type field_ty) field_val "tmpfield" builder
+            | _ -> field_val
+          in
           let field_ptr =
             build_struct_gep struct_ty struct_ptr i
               ("field" ^ string_of_int i)
@@ -233,14 +240,31 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
           in
           ignore (Llvm.build_store field_val field_ptr builder))
         fields;
-      struct_ptr
-  | FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) ->
-      let struct_ptr = codegen_expr struct_expr in
-      let field_ptr =
-        build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name
-          builder
-      in
-      build_load (llvm_type field_ty) field_ptr field_name builder
+      let struct_val = build_load struct_ty struct_ptr "struct_val" builder in
+      struct_val
+| FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) ->
+    let struct_val = codegen_expr struct_expr in
+    let struct_ptr =
+      if Llvm.classify_type (Llvm.type_of struct_val) = TypeKind.Pointer then
+        struct_val
+      else
+        (* Allocate space and store the struct to get a pointer *)
+        let ptr = build_alloca (llvm_type struct_ty) "struct_tmp" builder in
+        ignore (build_store struct_val ptr builder);
+        ptr
+    in
+    let field_ptr =
+      build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name
+        builder
+    in
+    (* For pointer types like array or nested struct, return the pointer directly *)
+    (match field_ty with
+    | TArray _ | TNamed _ ->
+        (* Avoid loading so the caller can decide how to use the pointer *)
+        field_ptr
+    | _ ->
+        (* Load primitive field values (int, float, bool, etc.) *)
+        build_load (llvm_type field_ty) field_ptr field_name builder)
   | ArrayInit (exprs, array_ty) ->
       ignore (Printf.printf "ArrayInit: %s\n" (string_of_type array_ty));
       let num_elems = List.length exprs in
@@ -286,12 +310,22 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       List.iteri
         (fun i expr ->
           let value = codegen_expr expr in
+          let actual_value =
+            match first_elem_ty with
+            | TNamed _ | TArray _ ->
+                (* If it's a pointer, load the struct/array value it points to *)
+                if classify_type (Llvm.type_of value) = TypeKind.Pointer then
+                  build_load (llvm_type first_elem_ty) value "tmp_value" builder
+                else
+                  value
+            | _ -> value
+          in
           let idx = const_int i32_t i in
           let elem_ptr =
             build_in_bounds_gep (llvm_type first_elem_ty) typed_ptr [| idx |]
               "elem_ptr" builder
           in
-          ignore (build_store value elem_ptr builder))
+          ignore (build_store actual_value elem_ptr builder))
         exprs;
 
       array_ptr
@@ -452,7 +486,11 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
          let value_to_store =
            match expr_ty with
            | TNamed _ | TArray _ ->
-               build_load (llvm_type expr_ty) expr_val "tmp" builder
+            (* Only load if expr_val is a pointer *)
+            if classify_type (Llvm.type_of expr_val) = TypeKind.Pointer then
+              build_load (llvm_type expr_ty) expr_val "tmp" builder
+            else
+              expr_val
            | _ -> expr_val
          in
          ignore (build_store value_to_store alloca builder);
@@ -500,7 +538,7 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
         | Some _ -> ()
         | None -> ignore (build_ret_void builder));
 
-      (* Llvm_analysis.assert_valid_function func; *)
+      Llvm_analysis.assert_valid_function func;
       None
   | ExternDecl (name, params, ret_ty) ->
       print_endline ("--- Generating code for extern function: " ^ name);

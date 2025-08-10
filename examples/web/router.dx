@@ -1,0 +1,37 @@
+import io;
+
+struct Route {
+    method: str;
+    path: str;
+    handler: fn() -> void;
+}
+
+fn hello_handler() -> void {
+    print("Hello World!\n");
+}
+
+fn goodbye_handler() -> void {
+    print("Goodbye!\n");
+}
+
+var routes = [
+    Route{method: "GET", path: "/hello", handler: hello_handler},
+    Route{method: "GET", path: "/goodbye", handler: goodbye_handler}
+];
+
+fn handle_request(method: str, path: str) -> void {
+    var i = 0;
+    while (i < 2) {
+        var route = routes[i];
+        if ((route.method == method) and (route.path == path)) {
+            route.handler();
+        } else {}
+        i = i + 1;
+    }
+    print("404 Not Found\n");
+}
+
+fn main() -> void {
+    handle_request("GET", "/hello");
+    handle_request("GET", "/unknown");
+}

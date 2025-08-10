@@ -2,7 +2,7 @@
 
 ## TODO
 
-- [ ] Struct access
+- [x] Struct access
 - [ ] String allocation / array of chars
 - [ ] If statement early return function type matching
 - [ ] Array slices?

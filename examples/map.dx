@@ -15,7 +15,7 @@ fn map_get(m: Map, key: int) -> int {
 }
 
 fn main() -> void {
-    var entry = MapEntry { key: 1, value: 1, occupied: false };
+    var entry = MapEntry { key: 1, value: 52, occupied: false };
     var my_map = Map { entries: [entry], size: 1 };
     var result = map_get(my_map, 0);
     var x = result + 1;
