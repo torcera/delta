@@ -1,0 +1,18 @@
+struct Engine {
+    cc: int;
+}
+
+struct Car {
+    engine: Engine;
+}
+
+fn get_car_cc(car: Car) -> int {
+    var engine = car.engine;
+    return engine.cc;
+}
+
+fn main() -> int {
+    var race_car = Car { engine: Engine { cc: 250 } };
+    var result = get_car_cc(race_car);
+    return result;
+}

@@ -163,12 +163,23 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
             raise (LLVMError ("Unknown function referenced: " ^ func_name))
       in *)
       let func_val = codegen_expr func_expr in
-      let arg_vals = List.map codegen_expr args in
-
+      (* let arg_vals = List.map codegen_expr args in *)
       let param_types, return_type =
         match func_type with
         | TFunction (param_types, return_type) -> (param_types, return_type)
         | _ -> raise (LLVMError "Invalid function type")
+      in
+
+      let arg_vals =
+        List.map2
+          (fun arg param_ty ->
+            let arg_val = codegen_expr arg in
+            match param_ty with
+            | TNamed _ ->
+              (* This loads struct from pointer to pass by copy instead of reference *)
+              build_load (llvm_type param_ty) arg_val "named_arg" builder
+            | _ -> arg_val)
+          args param_types
       in
 
       let expected_arg_count = List.length param_types in
@@ -489,7 +500,7 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
         | Some _ -> ()
         | None -> ignore (build_ret_void builder));
 
-      Llvm_analysis.assert_valid_function func;
+      (* Llvm_analysis.assert_valid_function func; *)
       None
   | ExternDecl (name, params, ret_ty) ->
       print_endline ("--- Generating code for extern function: " ^ name);

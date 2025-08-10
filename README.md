@@ -2,10 +2,10 @@
 
 ## TODO
 
-- [x] Structs
-- [x] Arrays
-- [x] Strings / chars
-- [?] If statement early return
+- [ ] Struct access
+- [ ] String allocation / array of chars
+- [ ] If statement early return function type matching
+- [ ] Array slices?
 - [ ] GC
 
 ## Grammar

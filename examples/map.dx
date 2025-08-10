@@ -10,13 +10,13 @@ struct Map {
 }
 
 fn map_get(m: Map, key: int) -> int {
-    var result = m.entries[key];
+    var result = m.entries[key].value;
     return result;
 }
 
 fn main() -> void {
     var entry = MapEntry { key: 1, value: 1, occupied: false };
-    var entries = [entry];
-    var mapz = Map { entries: entries, size: 1 };
-    var result = mapz.entries[0];
+    var my_map = Map { entries: [entry], size: 1 };
+    var result = map_get(my_map, 0);
+    var x = result + 1;
 }

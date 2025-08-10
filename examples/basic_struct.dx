@@ -1,0 +1,15 @@
+struct Person {
+    age: int;
+    quantity: int;
+    verified: bool;
+}
+
+fn get_age(p: Person) -> int {
+    return p.age;
+}
+
+fn main() -> void {
+    var p = Person { age: 21, quantity: 5, verified: true };
+    var age = get_age(p);
+    var x = age + 1;
+}
