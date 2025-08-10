@@ -1,4 +1,6 @@
-# Delta
+![Delta Logo](./assets/logo.svg)
+
+Delta is a statically typed, imperative language that uses LLVM as its backend.
 
 ## TODO
 
@@ -8,60 +10,54 @@
 - [ ] Array slices?
 - [ ] GC
 
-## Grammar
+### Building
 
+Build source.
+
+```sh
+dune build
 ```
-<program> ::= <decl>* EOF
 
-<decl> ::= "fn" <ID> "(" <param_list>? ")" ":" <type> <block>
-         | "extern" "fn" <ID> "(" <param_list>? ")" ":" <type> ";"
-         | "var" <ID> "=" <expr> ";"
-         | "struct" <ID> "{" <struct_field_decl>* "}"
-         | <stmt>
+Compile and dump LLVM IR to `llvm_bin/output.ll`.
 
-<param_list> ::= <param> ("," <param>)*
-<param> ::= <ID> <type>
-
-<stmt> ::= <expr> ";"
-         | "if" "(" <expr> ")" <stmt> "else" <stmt>
-         | "while" "(" <expr> ")" <stmt>
-         | "return" <expr> ";"
-         | "import" <ID> ";"
-         | <block>
-
-<block> ::= "{" <decl>* "}"
-
-<expr> ::= "(" <expr> ")"
-         | <INT>
-         | <FLOAT>
-         | <CHAR>
-         | <STRING>
-         | "nil"
-         | "true"
-         | "false"
-         | <ID>
-         | <unary_op> <expr>
-         | <expr> <binary_op> <expr>
-         | <ID> "=" <expr>
-         | <ID> "(" <arg_list>? ")"
-         | <ID> "{" <struct_field_list>? "}"
-         | <expr> "." <ID>
-         | "[" <expr_list>? "]"
-         | <expr> "[" <expr> "]"
-
-<arg_list> ::= <expr> ("," <expr>)*
-<expr_list> ::= <expr> ("," <expr>)*
-
-<unary_op> ::= "!" | "-"
-<binary_op> ::= "+" | "-" | "*" | "/" | "%"
-              | "<" | ">" | "<=" | ">="
-              | "==" | "!="
-              | "and" | "or"
-
-<struct_field> ::= <ID> ":" <expr>
-<struct_field_list> ::= <struct_field> ("," <struct_field>)*
-
-<struct_field_decl> ::= <ID> ":" <type> ";"
-
-<type> ::= "int" | "float" | "bool" | "char" | "str" | "void"
+```sh
+dune exec -- delta examples/example.dx
 ```
+
+Compile dynamically linked C library.
+
+```sh
+gcc -shared -fPIC -o libsocket.so socket.c
+```
+
+Generate executable from LLVM IR linked with a specified library.
+
+```sh
+clang-19 -target x86_64-pc-linux-gnu llvm_bin/output.ll -o llvm_bin/output -L. -lsocket -Wl,-rpath=.
+```
+
+Generate executable from LLVM IR linked with libc.
+
+```sh
+clang-19 -target x86_64-pc-linux-gnu llvm_bin/output.ll -o llvm_bin/output -lc -Wl,-rpath=.
+```
+
+Format all OCaml and dune files.
+
+```sh
+opam exec -- dune fmt
+```
+
+Lint opam file(s).
+
+```sh
+opam lint
+```
+
+## Contributing
+
+TBD - Not open for contributions until stable version is implemented.
+
+## License
+
+Delta source code is released under the [Apache License 2.0](./LICENSE).
