@@ -94,11 +94,6 @@ let llvm_type ty =
       match Hashtbl.find_opt custom_types name with
       | Some ty -> ty
       | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
-  (* | TStruct (name, _fields) -> (
-      match Hashtbl.find_opt custom_types name with
-      | Some ty -> ty
-      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found"))) *)
-  (* | TArray ty -> array_type (llvm_type ty) 10 *)
   | TArray _ -> dyn_array_type ()
   | TFunction (_, _) -> pointer_type context
 
@@ -157,14 +152,7 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       let var = find_variable name in
       build_store expr_val var builder
   | Call (func_expr, args, _ret_type) ->
-      (* let callee =
-        match lookup_function func_name delta_module with
-        | Some callee -> callee
-        | None ->
-            raise (LLVMError ("Unknown function referenced: " ^ func_name))
-      in *)
       let func_val = codegen_expr func_expr in
-      (* let arg_vals = List.map codegen_expr args in *)
       let param_types, return_type =
         match func_expr with
         | Identifier (_name, func_type) -> (
@@ -174,6 +162,7 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
         | _ -> raise (LLVMError "Invalid function type")
       in
 
+      (* let arg_vals = List.map codegen_expr args in *)
       let arg_vals =
         List.map2
           (fun arg param_ty ->

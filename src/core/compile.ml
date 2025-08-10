@@ -26,8 +26,6 @@ let compile source verbose =
     let typed_ast = Annotate.annotate_program parsed_ast in
     if verbose then print_endline (Typed_ast.show_program typed_ast);
 
-    (* Test.build();
-    Test.dump_ir() *)
     print_endline "[*] Compiling...";
     ignore (Direct.codegen_program typed_ast);
     Direct.dump_ir ();

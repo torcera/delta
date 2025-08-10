@@ -1,6 +1,6 @@
 import io;
 
-struct Route {
+type Route struct {
     method: str;
     path: str;
     handler: fn() -> void;

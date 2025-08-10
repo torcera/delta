@@ -3,12 +3,7 @@ open Syntax.Ast_types
 
 exception TypeError of string
 
-(* Type environment
-This maps identifiers like:
-type aliases (type Age int)
-struct types (type Point struct { x, y int })
-interfaces (type Shape interface { Area() float64 })
-To their type definitions. *)
+(* Type environment *)
 module TypeEnv = struct
   module StringMap = Map.Make (String)
 
@@ -24,13 +19,7 @@ module TypeEnv = struct
       env ""
 end
 
-(* Value environment
-This maps identifiers like:
-variables (var x int)
-constants (const Pi = 3.14)
-functions (func Add(a, b int) int)
-packages (import "fmt")
-To their corresponding value-level representations. *)
+(* Value environment *)
 module Env = struct
   module StringMap = Map.Make (String)
 
@@ -90,11 +79,6 @@ let rec annotate_expr (env : ty Env.StringMap.t)
       if var_ty = expr_ty then (Typed_ast.Assign (name, typed_expr), var_ty)
       else raise (TypeError "Type mismatch in assignment")
   | Parsed_ast.Call (func_expr, args) -> (
-      (* let func =
-        try Env.lookup env name
-        with Not_found ->
-          raise (TypeError ("Function " ^ name ^ " not found"))
-      in *)
       let typed_func_expr, func = annotate_expr env type_env func_expr in
       match func with
       | TFunction (param_types, return_type) ->
@@ -115,26 +99,11 @@ let rec annotate_expr (env : ty Env.StringMap.t)
               (TypeError "Number of arguments does not match function signature")
       | _ -> raise (TypeError "Attempted to call a non-function expression"))
   | Parsed_ast.StructInit (name, fields) ->
-      (* let struct_ty =
-        try Env.lookup env name
-        with Not_found -> raise (TypeError ("Struct " ^ name ^ " not found"))
-      in *)
       let struct_ty = TNamed name in
       let expected_fields =
-        match TypeEnv.lookup type_env name with StructDef fields -> fields
+        try match TypeEnv.lookup type_env name with StructDef fields -> fields
+        with Not_found -> raise (TypeError ("Struct " ^ name ^ " not found"))
       in
-      (* let expected_fields =
-        match struct_ty with
-        | TNamed name ->
-            let struct_def =
-              try TypeEnv.lookup type_env name
-              with Not_found ->
-                raise (TypeError ("Struct " ^ name ^ " not found"))
-            in
-            (match struct_def with StructDef fields -> fields)
-        (* | TStruct (_, fields) -> fields *)
-        | _ -> raise (TypeError (name ^ " is not a struct type"))
-      in *)
       let typed_fields =
         List.map
           (fun (field_name, expr) ->
@@ -167,17 +136,14 @@ let rec annotate_expr (env : ty Env.StringMap.t)
         annotate_expr env type_env struct_expr
       in
       match struct_expr_ty with
-      (* | TStruct (_, fields) -> ( *)
       | TNamed name -> (
-          (* let struct_def =
-            try TypeEnv.lookup type_env name
+          let fields =
+            try
+              match TypeEnv.lookup type_env name with
+              | StructDef fields -> fields
             with Not_found ->
               raise (TypeError ("Struct " ^ name ^ " not found"))
-          in *)
-          let fields =
-            match TypeEnv.lookup type_env name with StructDef fields -> fields
           in
-          (* let fields = match struct_def with StructDef fields -> fields in *)
           match List.assoc_opt field_name fields with
           | Some field_ty ->
               (* find index of field_name in fields *)
@@ -320,7 +286,6 @@ let build_top_level_declarations (decls : Parsed_ast.decl list) :
           let env' = Env.extend env name (TNamed name) in
           let type_env' = TypeEnv.extend type_env name (StructDef fields) in
           (env', type_env')
-          (* Env.extend env name (TStruct (name, fields)) *)
       | _ -> (env, type_env))
     (Env.empty_env, TypeEnv.empty_env)
     decls

@@ -46,6 +46,7 @@
 %token RETURN
 %token WHILE
 %token STRUCT
+%token TYPE
 %token MAP
 %token IMPORT
 %token DOT
@@ -106,7 +107,7 @@ decl:
     | FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; ARROW; return_type=ty; body=block { FuncDecl (name, params, body, return_type) }
     | EXTERN; FUNCTION; name=ID; LPAREN; params=separated_list(COMMA, param); RPAREN; ARROW; return_type=ty; SEMICOLON { ExternDecl (name, params, return_type) }
     | VAR; name=ID; EQUAL; e=expr; SEMICOLON { VarDecl(name, e) }
-    | STRUCT; name=ID; LBRACE; fields=list(struct_field_decl); RBRACE { StructDecl (name, fields) }
+    | TYPE; name=ID; STRUCT; LBRACE; fields=list(struct_field_decl); RBRACE { StructDecl (name, fields) }
     | s=stmt { Statement(s) }
     ;
 

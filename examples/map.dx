@@ -1,10 +1,10 @@
-struct MapEntry {
+type MapEntry struct {
     key: int;
     value: int;
     occupied: bool;
 }
 
-struct Map {
+type Map struct {
     entries: MapEntry[];
     size: int;
 }

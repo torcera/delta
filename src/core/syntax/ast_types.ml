@@ -8,7 +8,6 @@ type ty =
   | TString
   | TVoid
   | TFunction of ty list * ty
-  (* | TStruct of name * (name * ty) list *)
   | TArray of ty
   | TNamed of name
 [@@deriving show, eq]
@@ -60,7 +59,6 @@ let string_of_type (t : ty) : string =
   | TString -> "String"
   | TVoid -> "Unit"
   | TFunction _ -> "Function"
-  (* | TStruct _ -> "Struct" *)
   | TArray _ -> "Array"
   | TNamed name -> name
 

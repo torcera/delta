@@ -1,8 +1,8 @@
-struct Engine {
+type Engine struct {
     cc: int;
 }
 
-struct Car {
+type Car struct {
     engine: Engine;
 }
 

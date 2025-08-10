@@ -1,4 +1,4 @@
-struct Person {
+type Person struct {
     age: int;
     quantity: int;
     verified: bool;
