@@ -2,10 +2,10 @@
 
 ## TODO
 
-- [x] If statement early return
 - [x] Structs
 - [x] Arrays
 - [x] Strings / chars
+- [?] If statement early return
 - [ ] GC
 
 ## Grammar

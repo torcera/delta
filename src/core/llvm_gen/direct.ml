@@ -1,6 +1,7 @@
 open Typing
 open Syntax.Ast_types
 open Llvm
+open Llvm_target
 
 exception LLVMError of string
 
@@ -52,7 +53,34 @@ let bool_t = i1_type context
 let i8_t = i8_type context
 let void_t = void_type context
 
-let rec llvm_type ty =
+let dyn_array_type () =
+  struct_type context
+    [|
+      i32_t; (* length *)
+      i32_t; (* capacity *)
+      pointer_type context (* data *);
+    |]
+
+let size_t = i64_type context
+let malloc_ty = function_type (pointer_type context) [| size_t |]
+let malloc_decl = declare_function "malloc" malloc_ty delta_module
+let _ = Llvm_X86.initialize ()
+let triple = Llvm_target.Target.default_triple ()
+let target = Llvm_target.Target.by_triple triple
+
+let target_machine =
+  Llvm_target.TargetMachine.create ~triple ~cpu:"generic" ~features:"" target
+
+let data_layout = Llvm_target.TargetMachine.data_layout target_machine
+
+let _ =
+  Llvm.set_data_layout
+    (Llvm_target.DataLayout.as_string data_layout)
+    delta_module
+
+let _ = Llvm.set_target_triple triple delta_module
+
+let llvm_type ty =
   match ty with
   | TInt -> i32_t
   | TFloat -> float_t
@@ -60,12 +88,26 @@ let rec llvm_type ty =
   | TString -> pointer_type context
   | TChar -> i8_t
   | TVoid -> void_type context
-  | TStruct (name, _fields) -> (
+  | TNamed name -> (
       match Hashtbl.find_opt custom_types name with
       | Some ty -> ty
-      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found")))
-  | TArray ty -> array_type (llvm_type ty) 10
+      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found"))
+  )
+  (* | TStruct (name, _fields) -> (
+      match Hashtbl.find_opt custom_types name with
+      | Some ty -> ty
+      | None -> raise (LLVMError ("Custom type " ^ name ^ " not found"))) *)
+  (* | TArray ty -> array_type (llvm_type ty) 10 *)
+  | TArray _ -> dyn_array_type ()
   | TFunction (_, _) -> pointer_type context
+
+let size_of_llvm_type ty =
+  match classify_type ty with
+  | TypeKind.Integer -> 4
+  | TypeKind.Float -> 4
+  | TypeKind.Double -> 8
+  | TypeKind.Pointer -> 8
+  | _ -> raise (LLVMError "Unsupported type size computation")
 
 let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   match expr with
@@ -76,15 +118,15 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
   | String s -> build_global_stringptr s "str" builder
   | Void -> const_null void_t
   | Identifier (name, ty) -> (
-    try
-      let var = find_variable name in
-      match ty with
-      | TStruct _ | TArray _ -> var
-      | _ -> build_load (llvm_type ty) var name builder
-    with LLVMError _ ->
-      match lookup_function name delta_module with
-      | Some func -> func
-      | None -> raise (LLVMError ("Function " ^ name ^ " not found")))
+      try
+        let var = find_variable name in
+        match ty with
+        | TNamed _ | TArray _ -> var
+        | _ -> build_load (llvm_type ty) var name builder
+      with LLVMError _ -> (
+        match lookup_function name delta_module with
+        | Some func -> func
+        | None -> raise (LLVMError ("Function " ^ name ^ " not found"))))
   | BinOp (op, lhs, rhs) -> (
       let lhs_val = codegen_expr lhs in
       let rhs_val = codegen_expr rhs in
@@ -120,11 +162,10 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
         | None ->
             raise (LLVMError ("Unknown function referenced: " ^ func_name))
       in *)
-
       let func_val = codegen_expr func_expr in
       let arg_vals = List.map codegen_expr args in
 
-      let (param_types, return_type) =
+      let param_types, return_type =
         match func_type with
         | TFunction (param_types, return_type) -> (param_types, return_type)
         | _ -> raise (LLVMError "Invalid function type")
@@ -134,14 +175,14 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
       if List.length args <> expected_arg_count then
         raise
           (LLVMError
-             (Printf.sprintf "Expected %d arguments, got %d"
-                expected_arg_count (List.length args)));
+             (Printf.sprintf "Expected %d arguments, got %d" expected_arg_count
+                (List.length args)));
 
       let llvm_func_ty =
         function_type (llvm_type return_type)
           (Array.of_list (List.map llvm_type param_types))
       in
-(* 
+      (* 
       let params = params func_val in
       if Array.length params <> List.length args then
         raise
@@ -157,13 +198,13 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
               (Array.of_list (List.map llvm_type param_types))
         | _ -> raise (LLVMError "Invalid function type")
       in *)
-      let call_inst = build_call llvm_func_ty func_val (Array.of_list arg_vals) "" builder in
-      if type_of call_inst |> classify_type = TypeKind.Void then
-        call_inst
+      let call_inst =
+        build_call llvm_func_ty func_val (Array.of_list arg_vals) "" builder
+      in
+      if type_of call_inst |> classify_type = TypeKind.Void then call_inst
       else (
         set_value_name "calltmp" call_inst;
-        call_inst
-      )
+        call_inst)
   | StructInit (name, fields) ->
       (* Note: name is struct name, not variable name! *)
       let struct_ty =
@@ -183,96 +224,156 @@ let rec codegen_expr (expr : Typed_ast.expr) : llvalue =
         fields;
       struct_ptr
   | FieldAccess (struct_expr, field_name, field_index, struct_ty, field_ty) ->
-    let struct_ptr = codegen_expr struct_expr in
-    let field_ptr = build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name builder in
-    build_load (llvm_type field_ty) field_ptr field_name builder
-  | ArrayInit (exprs, ty) ->
-      let array_ty = llvm_type ty in
-      let array_ptr = Llvm.build_alloca array_ty "array_tmp" builder in
+      let struct_ptr = codegen_expr struct_expr in
+      let field_ptr =
+        build_struct_gep (llvm_type struct_ty) struct_ptr field_index field_name
+          builder
+      in
+      build_load (llvm_type field_ty) field_ptr field_name builder
+  | ArrayInit (exprs, array_ty) ->
+      ignore (Printf.printf "ArrayInit: %s\n" (string_of_type array_ty));
+      let num_elems = List.length exprs in
+      let array_llvm_ty = llvm_type array_ty in
+      let first_elem_ty =
+        match array_ty with
+        | TArray first_elem_ty -> first_elem_ty
+        | _ -> raise (LLVMError "Invalid array type")
+      in
+      ignore (Printf.printf "elem_llvm_ty: %s\n" (string_of_type first_elem_ty));
+      let array_struct_ty = dyn_array_type () in
+
+      let array_ptr = build_alloca array_struct_ty "array_tmp" builder in
+
+      (* Allocate heap for data *)
+      let num_elem_64 = Int64.of_int num_elems in
+      let elem_size_64 = DataLayout.abi_size array_llvm_ty data_layout in
+      let size_64 = Int64.mul num_elem_64 elem_size_64 in
+      let total_size = const_of_int64 size_t size_64 true in
+      let malloc_raw =
+        build_call malloc_ty malloc_decl [| total_size |] "malloc_tmp" builder
+      in
+
+      (* Store fields *)
+      let length_ptr =
+        build_struct_gep array_struct_ty array_ptr 0 "len_ptr" builder
+      in
+      let capacity_ptr =
+        build_struct_gep array_struct_ty array_ptr 1 "cap_ptr" builder
+      in
+      let data_ptr_ptr =
+        build_struct_gep array_struct_ty array_ptr 2 "data_ptr" builder
+      in
+
+      ignore (build_store (const_int i32_t num_elems) length_ptr builder);
+      ignore (build_store (const_int i32_t num_elems) capacity_ptr builder);
+      ignore (build_store malloc_raw data_ptr_ptr builder);
+
+      (* Store elements: cast raw malloc ptr to typed pointer locally *)
+      let typed_ptr =
+        build_bitcast malloc_raw (pointer_type context) "typed_data_ptr" builder
+      in
       List.iteri
         (fun i expr ->
-          let expr_val = codegen_expr expr in
-          let element_ptr =
-            build_gep array_ty array_ptr [| const_int i32_t 0; const_int i32_t i |]
-              ("element" ^ string_of_int i) builder
+          let value = codegen_expr expr in
+          let idx = const_int i32_t i in
+          let elem_ptr =
+            build_in_bounds_gep (llvm_type first_elem_ty) typed_ptr [| idx |]
+              "elem_ptr" builder
           in
-          ignore (Llvm.build_store expr_val element_ptr builder))
+          ignore (build_store value elem_ptr builder))
         exprs;
+
       array_ptr
-  | ArrayAccess (array_expr, index_expr, array_ty, elem_ty) ->
+  | ArrayAccess (array_expr, index_expr, _array_ty, elem_ty) ->
+      let elem_llvm_ty = llvm_type elem_ty in
+      let array_struct_ty = dyn_array_type () in
+
       let array_ptr = codegen_expr array_expr in
       let index_val = codegen_expr index_expr in
-      let element_ptr =
-        build_gep (llvm_type array_ty) array_ptr [| const_int i32_t 0; index_val |] "element" builder
+
+      (* Load the opaque data pointer from struct *)
+      let data_ptr_ptr =
+        build_struct_gep array_struct_ty array_ptr 2 "data_ptr_ptr" builder
       in
-      build_load (llvm_type elem_ty) element_ptr "element" builder
+      let raw_data_ptr =
+        build_load (pointer_type context) data_ptr_ptr "raw_data_ptr" builder
+      in
+
+      (* GEP to element *)
+      let elem_ptr =
+        build_in_bounds_gep elem_llvm_ty raw_data_ptr [| index_val |] "elem_ptr"
+          builder
+      in
+      build_load elem_llvm_ty elem_ptr "elem" builder
 
 let rec codegen_stmt (stmt : Typed_ast.stmt) : llvalue option =
   match stmt with
   | ExprStmt expr ->
       ignore (codegen_expr expr);
       None
-| IfStmt (cond, then_stmt, else_stmt) ->
-    let cond_val = codegen_expr cond in
-    let zero = const_int bool_t 0 in
-    let cond_bool = build_icmp Icmp.Ne cond_val zero "ifcond" builder in
-    let start_bb = insertion_block builder in
-    let func = block_parent start_bb in
-    let then_bb = append_block context "then" func in
-    let else_bb = append_block context "else" func in
-    let merge_bb = append_block context "ifcont" func in
-    ignore (build_cond_br cond_bool then_bb else_bb builder);
+  | IfStmt (cond, then_stmt, else_stmt) ->
+      let cond_val = codegen_expr cond in
+      let zero = const_int bool_t 0 in
+      let cond_bool = build_icmp Icmp.Ne cond_val zero "ifcond" builder in
+      let start_bb = insertion_block builder in
+      let func = block_parent start_bb in
+      let then_bb = append_block context "then" func in
+      let else_bb = append_block context "else" func in
+      let merge_bb = append_block context "ifcont" func in
+      ignore (build_cond_br cond_bool then_bb else_bb builder);
 
-    (* Then block *)
-    position_at_end then_bb builder;
-    enter_scope ();
-    let then_val = codegen_stmt then_stmt in
-    exit_scope ();
-    (* If then block does NOT end with a terminator, add branch to merge *)
-    if Llvm.block_terminator then_bb = None then
-      ignore (build_br merge_bb builder);
-    let then_bb_end = insertion_block builder in
+      (* Then block *)
+      position_at_end then_bb builder;
+      enter_scope ();
+      let then_val = codegen_stmt then_stmt in
+      exit_scope ();
+      (* If then block does NOT end with a terminator, add branch to merge *)
+      if Llvm.block_terminator then_bb = None then
+        ignore (build_br merge_bb builder);
+      let then_bb_end = insertion_block builder in
 
-    (* Else block *)
-    position_at_end else_bb builder;
-    enter_scope ();
-    let else_val = codegen_stmt else_stmt in
-    exit_scope ();
-    (* If else block does NOT end with a terminator, add branch to merge *)
-    if Llvm.block_terminator else_bb = None then
-      ignore (build_br merge_bb builder);
-    let else_bb_end = insertion_block builder in
+      (* Else block *)
+      position_at_end else_bb builder;
+      enter_scope ();
+      let else_val = codegen_stmt else_stmt in
+      exit_scope ();
+      (* If else block does NOT end with a terminator, add branch to merge *)
+      if Llvm.block_terminator else_bb = None then
+        ignore (build_br merge_bb builder);
+      let else_bb_end = insertion_block builder in
 
-    (* Merge block *)
-    position_at_end merge_bb builder;
+      (* Merge block *)
+      position_at_end merge_bb builder;
 
-    (* Determine which blocks actually branch to merge_bb *)
-    let incoming = [] in
-    let incoming =
-      if
-        match Llvm.block_terminator then_bb with
-        | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
-            Array.exists ((=) merge_bb) (Llvm.successors term)
-        | _ -> false
-      then (Option.value then_val ~default:(const_null i32_t), then_bb_end) :: incoming
-      else incoming
-    in
-    let incoming =
-      if
-        match Llvm.block_terminator else_bb with
-        | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
-            Array.exists ((=) merge_bb) (Llvm.successors term)
-        | _ -> false
-      then (Option.value else_val ~default:(const_null i32_t), else_bb_end) :: incoming
-      else incoming
-    in
+      (* Determine which blocks actually branch to merge_bb *)
+      let incoming = [] in
+      let incoming =
+        if
+          match Llvm.block_terminator then_bb with
+          | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
+              Array.exists (( = ) merge_bb) (Llvm.successors term)
+          | _ -> false
+        then
+          (Option.value then_val ~default:(const_null i32_t), then_bb_end)
+          :: incoming
+        else incoming
+      in
+      let incoming =
+        if
+          match Llvm.block_terminator else_bb with
+          | Some term when Llvm.instr_opcode term = Llvm.Opcode.Br ->
+              Array.exists (( = ) merge_bb) (Llvm.successors term)
+          | _ -> false
+        then
+          (Option.value else_val ~default:(const_null i32_t), else_bb_end)
+          :: incoming
+        else incoming
+      in
 
-    (* Build PHI only if there's at least one incoming edge *)
-    if incoming <> [] then
-      ignore (build_phi incoming "iftmp" builder);
+      (* Build PHI only if there's at least one incoming edge *)
+      if incoming <> [] then ignore (build_phi incoming "iftmp" builder);
 
-    None
-
+      None
   | ReturnStmt expr ->
       let return_val = codegen_expr expr in
       ignore (build_ret return_val builder);
@@ -339,8 +440,9 @@ and codegen_decl ~global (decl : Typed_ast.decl) : llvalue option =
          let alloca = create_entry_block_alloca func name (llvm_type expr_ty) in
          let value_to_store =
            match expr_ty with
-             | TStruct _ | TArray _ -> build_load (llvm_type expr_ty) expr_val "tmp" builder
-             | _ -> expr_val
+           | TNamed _ | TArray _ ->
+               build_load (llvm_type expr_ty) expr_val "tmp" builder
+           | _ -> expr_val
          in
          ignore (build_store value_to_store alloca builder);
          add_local name alloca));

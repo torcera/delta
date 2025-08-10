@@ -1,5 +1,5 @@
 (library
  (name llvm_gen)
- (libraries typing llvm llvm.analysis)
+ (libraries typing llvm llvm.analysis llvm.target llvm_X86)
  (preprocess
   (pps ppx_deriving.show ppx_deriving.eq)))

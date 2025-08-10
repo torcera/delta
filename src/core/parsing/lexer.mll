@@ -54,6 +54,7 @@ rule read_token =
     | "return" { RETURN }
     | "extern" { EXTERN }
     | "struct" { STRUCT }
+    | "map" { MAP }
     | "." { DOT }
     | whitespace { read_token lexbuf }
     | "#" { read_comment lexbuf }

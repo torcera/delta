@@ -1,0 +1,22 @@
+struct MapEntry {
+    key: int;
+    value: int;
+    occupied: bool;
+}
+
+struct Map {
+    entries: MapEntry[];
+    size: int;
+}
+
+fn map_get(m: Map, key: int) -> int {
+    var result = m.entries[key];
+    return result;
+}
+
+fn main() -> void {
+    var entry = MapEntry { key: 1, value: 1, occupied: false };
+    var entries = [entry];
+    var mapz = Map { entries: entries, size: 1 };
+    var result = mapz.entries[0];
+}

@@ -46,6 +46,7 @@
 %token RETURN
 %token WHILE
 %token STRUCT
+%token MAP
 %token IMPORT
 %token DOT
 %token EXTERN
@@ -78,7 +79,10 @@ expr:
     | struct_name=ID; LBRACE; fields=separated_list(COMMA, struct_field); RBRACE { StructInit(struct_name, fields) }
     | struct_expr=expr; DOT; field_name=ID { FieldAccess(struct_expr, field_name) }
     | LBRACKET; elements=separated_list(COMMA, expr); RBRACKET { ArrayInit(elements) }
-    | array_expr=expr; LBRACKET; element_index=expr; RBRACKET { ArrayAccess(array_expr, element_index) }
+    | container_expr=expr; LBRACKET; key_expr=expr; RBRACKET { ArrayAccess(container_expr, key_expr) }
+    // | MAP; LANGLE; key_ty=ty; COMMA; value_ty=ty; RANGLE; LBRACE; fields=separated_list(COMMA, map_field); RBRACE { MapInit(key_ty, value_ty, fields) }
+    // | map_expr=expr; LBRACKET; key_expr=expr; RBRACKET { MapAccess(map_expr, key_expr) }
+    // | map_expr=expr; LBRACKET; key_expr=expr; RBRACKET; EQUAL; value_expr=expr { MapAssign(map_expr, key_expr, value_expr) }
     ;
 
 stmt:
@@ -113,6 +117,9 @@ struct_field:
 struct_field_decl:
     | name=ID; COLON; ty=ty; SEMICOLON { (name, ty) }
 
+map_field:
+    | key_expr=expr; COLON; value_expr=expr { (key_expr, value_expr) }
+
 program:
     | decls=list(decl); EOF { Program(decls) }
     ;
@@ -126,6 +133,7 @@ ty:
     | TYPE_VOID { TVoid }
     | ty=ty; LBRACKET; RBRACKET { TArray(ty) }
     | FUNCTION; LPAREN; params=separated_list(COMMA, ty); RPAREN; ARROW; ret=ty { TFunction(params, ret) }
+    | name=ID; { TNamed(name) }
     ;
 
 %inline un_op:

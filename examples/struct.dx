@@ -4,9 +4,14 @@ struct Person {
     verified: bool;
 }
 
-fn main(): int {
+fn get_age(p: Person) -> int {
+    return p.age;
+}
+
+fn main() -> int {
     var p = Person { age: 21, quantity: 5, verified: true };
     var x = p.quantity;
+    var age = get_age(p);
     if (!p.verified) {
         x = x + 5;
     } else {

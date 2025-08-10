@@ -1,0 +1,11 @@
+import io;
+
+fn main() -> void {
+    var array = [42, 43];
+    var x = array[0] + array[1] + 1;
+    if (x == 86) {
+        print("HELLO");
+    } else {
+        print("GOODBYE");
+    }
+}

@@ -1,6 +1,4 @@
 type name = string [@@deriving show, eq]
-type id = int [@@deriving show, eq]
-type level = int [@@deriving show, eq]
 
 type ty =
   | TInt
@@ -10,9 +8,13 @@ type ty =
   | TString
   | TVoid
   | TFunction of ty list * ty
-  | TStruct of name * (name * ty) list
+  (* | TStruct of name * (name * ty) list *)
   | TArray of ty
+  | TNamed of name
 [@@deriving show, eq]
+
+type type_def =
+  | StructDef of (string * ty) list
 
 type param = name * ty [@@deriving show, eq]
 
@@ -60,5 +62,10 @@ let string_of_type (t : ty) : string =
   | TString -> "String"
   | TVoid -> "Unit"
   | TFunction _ -> "Function"
-  | TStruct _ -> "Struct"
+  (* | TStruct _ -> "Struct" *)
   | TArray _ -> "Array"
+  | TNamed name -> name
+
+let string_of_type_def (t : type_def) : string =
+  match t with
+  | StructDef _ -> "Struct"
